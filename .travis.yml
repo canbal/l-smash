@@ -9,3 +9,4 @@ script:
  - "LD_LIBRARY_PATH=$PWD/tmp/lib $PWD/tmp/bin/muxer --help"
  - "LD_LIBRARY_PATH=$PWD/tmp/lib $PWD/tmp/bin/remuxer --help"
  - "LD_LIBRARY_PATH=$PWD/tmp/lib $PWD/tmp/bin/timelineeditor --help"
+ - "LD_LIBRARY_PATH=$PWD/tmp/lib $PWD/tmp/bin/opengop --help"

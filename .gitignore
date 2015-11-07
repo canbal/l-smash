@@ -21,6 +21,7 @@ boxdumper
 muxer
 remuxer
 timelineeditor
+opengop
 *.264
 *.3gp
 *.3g2
