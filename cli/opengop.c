@@ -92,7 +92,7 @@ static int is_idr
 )
 {
     if( !sample || !sample->data || sample->length <= nalu_length_size )
-    return -1;
+        return -1;
     uint8_t *data = sample->data;
     uint32_t remaining = sample->length;
     while( remaining )
