@@ -66,22 +66,7 @@ static int opengop_error
     return -1;
 }
 
-static int opengop_done
-(
-    lsmash_root_t            *root,
-    lsmash_file_parameters_t *file_param,
-    const char               *message
-)
-{
-    lsmash_close_file( file_param );
-    lsmash_destroy_root( root );
-    printf( "%s", message );
-    return 0;
-}
-
-
 #define OPENGOP_ERR( message ) opengop_error( root, &file_param, message )
-#define OPENGOP_DONE( message ) opengop_done( root, &file_param, message )
 #define DO_NOTHING
 #define IDR 5
 
@@ -92,28 +77,27 @@ static int is_idr
 )
 {
     if( !sample || !sample->data || sample->length <= nalu_length_size )
-        return -1;
+        return LSMASH_ERR_INVALID_DATA;
     uint8_t *data = sample->data;
     uint32_t remaining = sample->length;
     while( remaining )
     {
-    if( remaining <= nalu_length_size )
-        return -1;
-    uint8_t nal_type = data[nalu_length_size] & 0x1F;
-    if( nal_type == IDR )
-        return 1;
-    fprintf( stdout, "nal_type = %d\n", nal_type );
-    uint32_t nal_size = 0;
-    for( uint32_t i = 0; i < nalu_length_size; i++ )
-    {
-        nal_size = nal_size << 8;
-        nal_size += data[i];
-    }
-    nal_size += nalu_length_size;
-    if( remaining < nal_size )
-        return -1;
-    remaining -= nal_size;
-    data += nal_size;
+        if( remaining <= nalu_length_size )
+            return LSMASH_ERR_INVALID_DATA;
+        uint8_t nal_type = data[nalu_length_size] & 0x1F;
+        if( nal_type == IDR )
+            return 1;
+        uint32_t nal_size = 0;
+        for( uint32_t i = 0; i < nalu_length_size; i++ )
+        {
+            nal_size = nal_size << 8;
+            nal_size += data[i];
+        }
+        nal_size += nalu_length_size;
+        if( remaining < nal_size )
+            return LSMASH_ERR_INVALID_DATA;
+        remaining -= nal_size;
+        data += nal_size;
     }
     return 0;
 }
@@ -166,7 +150,8 @@ int main( int argc, char *argv[] )
     lsmash_initialize_movie_parameters( &movie_param );
     lsmash_get_movie_parameters( root, &movie_param );
 
-    uint32_t has_video = 0;
+    uint8_t has_video = 0;
+    uint8_t has_opengop = 0;
     uint32_t num_tracks = movie_param.number_of_tracks;
     for( uint32_t track_number = 1; track_number <= num_tracks; track_number++ )
     {
@@ -226,14 +211,14 @@ int main( int argc, char *argv[] )
                 fprintf( stdout, "Frame %d is a keyframe. Checking if IDR? ", i );
                 lsmash_sample_t *sample = lsmash_get_sample_from_media_timeline( root, track_ID, i );
                 int ret = is_idr( sample, nalu_length_size );
-                if( ret == -1 )
+                if( ret < 0 )
                 {
                     eprintf( "Failed to read frame %d.\n", i );
                 }
                 else if( !ret )
                 {
                     fprintf( stdout, "not IDR\n" );
-                    return OPENGOP_DONE( "Video contains Open GOP(s).\n" );
+                    has_opengop = 1;
                 }
                 else
                 {
@@ -247,7 +232,10 @@ int main( int argc, char *argv[] )
     }
     if( !has_video )
         return OPENGOP_ERR( "File does not contain a video track.\n" );
-    fprintf( stdout, "Video does not contain an Open GOP.\n" );
+    if( has_opengop )
+        fprintf( stdout, "Video contains Open GOP(s).\n" );
+    else
+        fprintf( stdout, "Video does not contain an Open GOP.\n" );
     lsmash_destroy_root( root );
     return 0;
 }
