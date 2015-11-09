@@ -85,6 +85,39 @@ static int opengop_done
 #define DO_NOTHING
 #define IDR 5
 
+static int is_idr
+(
+     lsmash_sample_t          *sample,
+     uint32_t                  nalu_length_size
+)
+{
+    if( !sample || !sample->data || sample->length <= nalu_length_size )
+    return -1;
+    uint8_t *data = sample->data;
+    uint32_t remaining = sample->length;
+    while( remaining )
+    {
+    if( remaining <= nalu_length_size )
+        return -1;
+    uint8_t nal_type = data[nalu_length_size] & 0x1F;
+    if( nal_type == IDR )
+        return 1;
+    fprintf( stdout, "nal_type = %d\n", nal_type );
+    uint32_t nal_size = 0;
+    for( uint32_t i = 0; i < nalu_length_size; i++ )
+    {
+        nal_size = nal_size << 8;
+        nal_size += data[i];
+    }
+    nal_size += nalu_length_size;
+    if( remaining < nal_size )
+        return -1;
+    remaining -= nal_size;
+    data += nal_size;
+    }
+    return 0;
+}
+
 int main( int argc, char *argv[] )
 {
     if ( argc < 2 )
@@ -186,19 +219,25 @@ int main( int argc, char *argv[] )
         fprintf( stdout, "Started scanning %d frames for Open GOPs\n", ts_list.sample_count );
         for( uint32_t i = 1; i <= ts_list.sample_count; i++ )
         {
-            fprintf( stdout, "Scanning frame %d\r", i );
             lsmash_sample_property_t sample_property;
             lsmash_get_sample_property_from_media_timeline( root, track_ID, i, &sample_property );
             if( sample_property.ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC )
             {
+                fprintf( stdout, "Frame %d is a keyframe. Checking if IDR? ", i );
                 lsmash_sample_t *sample = lsmash_get_sample_from_media_timeline( root, track_ID, i );
-                if( !sample || sample->length <= nalu_length_size || !sample->data )
+                int ret = is_idr( sample, nalu_length_size );
+                if( ret == -1 )
                 {
                     eprintf( "Failed to read frame %d.\n", i );
                 }
-                else if( (sample->data[nalu_length_size] & 0x1F) != IDR )
+                else if( !ret )
                 {
+                    fprintf( stdout, "not IDR\n" );
                     return OPENGOP_DONE( "Video contains Open GOP(s).\n" );
+                }
+                else
+                {
+                    fprintf( stdout, "IDR\n" );
                 }
                 lsmash_delete_sample( sample );
             }
